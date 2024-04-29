@@ -39,24 +39,53 @@ def find_neighbors(path):
 	f = codecs.open(path, 'r', "utf-8", "ignore")
 	code = f.read()
 	f.close()
-	return [normalize(include) for include in include_regex.findall(code)]
+	return [normalize(include) + get_extension(include) for include in include_regex.findall(code)]
 
-def create_graph(folder, create_cluster, label_cluster, strict):
+def count_lines(filename, chunk_size=1<<13):
+    with open(filename) as file:
+        return sum(chunk.count('\n')
+                   for chunk in iter(lambda: file.read(chunk_size), ''))
+
+def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines):
 	""" Create a graph from a folder. """
 	# Find nodes and clusters
 	files = find_all_files(folder)
+ 
 	folder_to_files = defaultdict(list)
 	for path in files:
 		folder_to_files[os.path.dirname(path)].append(path)
-	nodes = {normalize(path) for path in files}
+	nodes = {normalize(path) + get_extension(path) for path in files}
 	# Create graph
 	graph = Digraph(strict=strict)
 	# Find edges and create clusters
+	
+	files_to_numbers = defaultdict(int)
+	if text:
+		str_lines = ['']
+		for i in range(len(files)):
+			normalized_name = normalize(files[i]) + get_extension(files[i]) 
+			if lines:
+				str_lines.append(f'{i + 1} {normalized_name} {count_lines(files[i])}\n')
+			else:
+				str_lines.append(f'{i + 1} {normalized_name}\n')
+			files_to_numbers[normalized_name] = i + 1
+	if gv:
+		gv_lines = []
+		gv_lines.append('digraph ' + str(normalize(folder)) + ' {\n')
+		for i in range(len(files)):
+			normalized_name = normalize(files[i]) + get_extension(files[i]) 
+			files_to_numbers[normalized_name] = i + 1
+			gv_lines.append(f'\t{i + 1} [label="{normalized_name}"];\n')
+	
+	subgraph_counter = 0
 	for folder in folder_to_files:
 		with graph.subgraph(name='cluster_{}'.format(folder)) as cluster:
+			if gv and create_cluster:
+				gv_lines.append(f'\tsubgraph cluster_{subgraph_counter} ' + '{\n')
+				subgraph_counter += 1
 			for path in folder_to_files[folder]:
 				color = 'black'
-				node = normalize(path)
+				node = normalize(path) + get_extension(path)
 				ext = get_extension(path)
 				if ext in valid_headers[0]:
 					color = valid_headers[1]
@@ -70,8 +99,25 @@ def create_graph(folder, create_cluster, label_cluster, strict):
 				for neighbor in neighbors:
 					if neighbor != node and neighbor in nodes:
 						graph.edge(node, neighbor, color=color)
-			if create_cluster and label_cluster:
-				cluster.attr(label=folder)
+						if text:
+							str_lines.append(f'{files_to_numbers[node]} {files_to_numbers[neighbor]}\n')
+						if gv:
+							gv_lines.append('\t' * create_cluster + f'\t{files_to_numbers[node]} -> {files_to_numbers[neighbor]} [color = {color}];\n')
+			if create_cluster:
+				if label_cluster:
+					cluster.attr(label=folder)
+					if gv:
+						gv_lines.append(f'\t\tlabel = "{folder}";\n')
+				if gv:
+					gv_lines.append('\t}\n')
+	if text:
+		with open('graph.txt', mode='w') as file:
+			str_lines[0] = f'{len(files)} {len(str_lines) - len(files) - 1}\n'
+			file.writelines(str_lines)
+	if gv:
+		with open('graph.gv', mode='w') as file:
+			gv_lines.append('}')
+			file.writelines(gv_lines)
 	return graph
 
 if __name__ == '__main__':
@@ -84,7 +130,11 @@ if __name__ == '__main__':
 	parser.add_argument('-c', '--cluster', action='store_true', help='Create a cluster for each subfolder')
 	parser.add_argument('--cluster-labels', dest='cluster_labels', action='store_true', help='Label subfolder clusters')
 	parser.add_argument('-s', '--strict', action='store_true', help='Rendering should merge multi-edges', default=False)
+	parser.add_argument('--gv', action='store_true', help='Create graph.gv', default=False)
+	parser.add_argument('--text', action='store_true', help='Create graph.txt with filenames and edges', default=False)
+	parser.add_argument('--lines', action='store_true', help='Add to graph.txt number of lines in files', default=False)
+  
 	args = parser.parse_args()
-	graph = create_graph(args.folder, args.cluster, args.cluster_labels, args.strict)
+	graph = create_graph(args.folder, args.cluster, args.cluster_labels, args.strict, args.gv, args.text, args.lines)
 	graph.format = args.format
 	graph.render(args.output, cleanup=True, view=args.view)
