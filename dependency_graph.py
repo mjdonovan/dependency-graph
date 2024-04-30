@@ -61,7 +61,7 @@ def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines)
 	
 	files_to_numbers = defaultdict(int)
 	if text:
-		str_lines = ['']
+		str_lines = ['', 'Nodes:\n']
 		for i in range(len(files)):
 			normalized_name = normalize(files[i]) + get_extension(files[i]) 
 			if lines:
@@ -69,6 +69,7 @@ def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines)
 			else:
 				str_lines.append(f'{i + 1} {normalized_name}\n')
 			files_to_numbers[normalized_name] = i + 1
+		str_lines.append('Edges:\n')
 	if gv:
 		gv_lines = []
 		gv_lines.append('digraph ' + str(normalize(folder)) + ' {\n')
@@ -112,7 +113,7 @@ def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines)
 					gv_lines.append('\t}\n')
 	if text:
 		with open('graph.txt', mode='w') as file:
-			str_lines[0] = f'{len(files)} {len(str_lines) - len(files) - 1}\n'
+			str_lines[0] = f'Nodes count: {len(files)} Edges count: {len(str_lines) - len(files) - 3}\n'
 			file.writelines(str_lines)
 	if gv:
 		with open('graph.gv', mode='w') as file:
