@@ -39,12 +39,22 @@ def find_neighbors(path):
 	f = codecs.open(path, 'r', "utf-8", "ignore")
 	code = f.read()
 	f.close()
-	return [normalize(include) + get_extension(include) for include in include_regex.findall(code)]
+	return [include for include in include_regex.findall(code)]
 
 def count_lines(filename, chunk_size=1<<13):
     with open(filename) as file:
         return sum(chunk.count('\n')
-                   for chunk in iter(lambda: file.read(chunk_size), ''))
+                   for chunk in iter(lambda: file.read(chunk_size), '')) + 1
+
+def get_absolute_path(path, include):
+	parsed_include = include.split('/')
+	parsed_path = path.split('/')
+	higher_directory_counter = 1
+	for directory in parsed_include:
+		if directory != '..':
+			break	
+		higher_directory_counter += 1
+	return '/'.join(parsed_path[:-higher_directory_counter] + parsed_include[higher_directory_counter - 1:]) 
 
 def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines):
 	""" Create a graph from a folder. """
@@ -54,7 +64,8 @@ def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines)
 	folder_to_files = defaultdict(list)
 	for path in files:
 		folder_to_files[os.path.dirname(path)].append(path)
-	nodes = {normalize(path) + get_extension(path) for path in files}
+  
+	nodes = set(files)
 	# Create graph
 	graph = Digraph(strict=strict)
 	# Find edges and create clusters
@@ -68,48 +79,54 @@ def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines)
 				str_lines.append(f'{i + 1} {normalized_name} {count_lines(files[i])}\n')
 			else:
 				str_lines.append(f'{i + 1} {normalized_name}\n')
-			files_to_numbers[normalized_name] = i + 1
+			files_to_numbers[files[i]] = i + 1
 		str_lines.append('Edges:\n')
 	if gv:
 		gv_lines = []
 		gv_lines.append('digraph ' + str(normalize(folder)) + ' {\n')
 		for i in range(len(files)):
 			normalized_name = normalize(files[i]) + get_extension(files[i]) 
-			files_to_numbers[normalized_name] = i + 1
+			files_to_numbers[files[i]] = i + 1
 			gv_lines.append(f'\t{i + 1} [label="{normalized_name}"];\n')
 	
 	subgraph_counter = 0
 	for folder in folder_to_files:
 		with graph.subgraph(name='cluster_{}'.format(folder)) as cluster:
-			if gv and create_cluster:
-				gv_lines.append(f'\tsubgraph cluster_{subgraph_counter} ' + '{\n')
-				subgraph_counter += 1
+			subgraph_nodes = []
 			for path in folder_to_files[folder]:
 				color = 'black'
-				node = normalize(path) + get_extension(path)
+				label = normalize(path) + get_extension(path)
+
 				ext = get_extension(path)
 				if ext in valid_headers[0]:
 					color = valid_headers[1]
 				if ext in valid_sources[0]:
 					color = valid_sources[1]
 				if create_cluster:
-					cluster.node(node)
+					cluster.node(path, label)
+					subgraph_nodes.append(files_to_numbers[path])
 				else:
-					graph.node(node)
+					graph.node(path, label)
 				neighbors = find_neighbors(path)
 				for neighbor in neighbors:
-					if neighbor != node and neighbor in nodes:
-						graph.edge(node, neighbor, color=color)
+					abs_path = get_absolute_path(path, neighbor)
+					if abs_path != path and abs_path in nodes:
+						graph.edge(path, abs_path, color=color)
 						if text:
-							str_lines.append(f'{files_to_numbers[node]} {files_to_numbers[neighbor]}\n')
+							str_lines.append(f'{files_to_numbers[path]} {files_to_numbers[abs_path]}\n')
 						if gv:
-							gv_lines.append('\t' * create_cluster + f'\t{files_to_numbers[node]} -> {files_to_numbers[neighbor]} [color = {color}];\n')
+							gv_lines.append(f'\t{files_to_numbers[path]} -> {files_to_numbers[abs_path]} [color = {color}];\n')
 			if create_cluster:
+				if gv:
+					gv_lines.append(f'\tsubgraph cluster_{subgraph_counter} ' + '{\n')
+					subgraph_counter += 1
 				if label_cluster:
 					cluster.attr(label=folder)
 					if gv:
 						gv_lines.append(f'\t\tlabel = "{folder}";\n')
 				if gv:
+					for node in subgraph_nodes:
+						gv_lines.append(f'\t\t{node};\n')
 					gv_lines.append('\t}\n')
 	if text:
 		with open('graph.txt', mode='w') as file:
