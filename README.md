@@ -6,13 +6,15 @@ It is useful to check the presence of circular dependencies.
 
 ## Differences from original version
 
-The original version does not work correctly when the source and header files have the same names. This has been fixed in this version.
+The original version does not work properly when files from different directories have the same names or when the source and header files have the same names. This has been fixed in this version.
 
-The --gv argument has been added, which generates a graph.gv file with a graph for use in third-party applications.
+--gv argument generates a graph.gv file with a graph for use in third-party applications.
 
-The --text argument has been added, which generates a graph.txt file with a text file containing graph data.
+--text argument generates a graph.txt file with a text file containing graph data.
 
-Added the --line argument, which adds information about the number of lines in files in graph.txt (Requires the --text argument)
+--line argument adds information about the number of lines in files in graph.txt (Requires the --text argument).
+
+--ignore-tests argument adds ignoring to files with names that includes "test".
 
 ## Installation
 
@@ -28,7 +30,7 @@ pip3 install -r requirements.txt
 ## Manual
 
 ```
-usage: dependency_graph.py [-h] [-f {bmp,gif,jpg,png,pdf,svg}] [-v] [-c] [--cluster-labels] [-s] [--gv] [--text] [--lines] folder output
+usage: dependency_graph.py [-h] [-f {bmp,gif,jpg,png,pdf,svg}] [-v] [-c] [--cluster-labels] [-s] [--gv] [--text] [--lines] [--ignore-tests] folder output
 
 positional arguments:
   folder                Path to the folder to scan
@@ -45,6 +47,7 @@ options:
   --gv                  Create graph.gv
   --text                Create graph.txt with filenames and edges
   --lines               Add to graph.txt number of lines in files
+  --ignore-tests        Files with names that includes "test" will be ignored in graph
 ```
 
 ## Examples

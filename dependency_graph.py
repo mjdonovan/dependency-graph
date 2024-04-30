@@ -21,7 +21,7 @@ def get_extension(path):
 	""" Return the extension of the file targeted by path. """
 	return path[path.rfind('.'):]
 
-def find_all_files(path, recursive=True):
+def find_all_files(path, ignore_tests, recursive=True):
 	""" 
 	Return a list of all the files in the folder.
 	If recursive is True, the function will search recursively.
@@ -29,8 +29,15 @@ def find_all_files(path, recursive=True):
 	files = []
 	for entry in os.scandir(path):
 		if entry.is_dir() and recursive:
-			files += find_all_files(entry.path)
+			files += find_all_files(entry.path, ignore_tests)
 		elif get_extension(entry.path) in valid_extensions:
+			# print('!', entry.path)
+			if ignore_tests:
+				norm_path = normalize(entry)
+				# print(norm_path)
+				if len(norm_path) >= 4:
+					if 'test' in norm_path: 
+						continue
 			files.append(entry.path)
 	return files
 
@@ -56,10 +63,10 @@ def get_absolute_path(path, include):
 		higher_directory_counter += 1
 	return '/'.join(parsed_path[:-higher_directory_counter] + parsed_include[higher_directory_counter - 1:]) 
 
-def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines):
+def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines, ignore_tests):
 	""" Create a graph from a folder. """
 	# Find nodes and clusters
-	files = find_all_files(folder)
+	files = find_all_files(folder, ignore_tests)
  
 	folder_to_files = defaultdict(list)
 	for path in files:
@@ -151,8 +158,9 @@ if __name__ == '__main__':
 	parser.add_argument('--gv', action='store_true', help='Create graph.gv', default=False)
 	parser.add_argument('--text', action='store_true', help='Create graph.txt with filenames and edges', default=False)
 	parser.add_argument('--lines', action='store_true', help='Add to graph.txt number of lines in files', default=False)
+	parser.add_argument('--ignore-tests', action='store_true', help='Files with names that includes "test" will be ignored in graph', default=False)
   
 	args = parser.parse_args()
-	graph = create_graph(args.folder, args.cluster, args.cluster_labels, args.strict, args.gv, args.text, args.lines)
+	graph = create_graph(args.folder, args.cluster, args.cluster_labels, args.strict, args.gv, args.text, args.lines, args.ignore_tests)
 	graph.format = args.format
 	graph.render(args.output, cleanup=True, view=args.view)
