@@ -50,8 +50,7 @@ def find_neighbors(path):
 
 def count_lines(filename, chunk_size=1<<13):
     with open(filename) as file:
-        return sum(chunk.count('\n')
-                   for chunk in iter(lambda: file.read(chunk_size), '')) + 1
+        return len(file.readlines())
 
 def get_absolute_path(path, include):
 	parsed_include = include.split('/')
@@ -63,7 +62,7 @@ def get_absolute_path(path, include):
 		higher_directory_counter += 1
 	return '/'.join(parsed_path[:-higher_directory_counter] + parsed_include[higher_directory_counter - 1:]) 
 
-def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines, ignore_tests):
+def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines, ignore_tests, show_path):
 	""" Create a graph from a folder. """
 	# Find nodes and clusters
 	files = find_all_files(folder, ignore_tests)
@@ -81,7 +80,10 @@ def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines,
 	if text:
 		str_lines = ['', 'Nodes:\n']
 		for i in range(len(files)):
-			normalized_name = normalize(files[i]) + get_extension(files[i]) 
+			if show_path:
+				normalized_name = files[i]
+			else:
+				normalized_name = normalize(files[i]) + get_extension(files[i]) 
 			if lines:
 				str_lines.append(f'{i + 1} {normalized_name} {count_lines(files[i])}\n')
 			else:
@@ -92,7 +94,10 @@ def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines,
 		gv_lines = []
 		gv_lines.append('digraph ' + str(normalize(folder)) + ' {\n')
 		for i in range(len(files)):
-			normalized_name = normalize(files[i]) + get_extension(files[i]) 
+			if show_path:
+				normalized_name = files[i]
+			else:
+				normalized_name = normalize(files[i]) + get_extension(files[i]) 
 			files_to_numbers[files[i]] = i + 1
 			gv_lines.append(f'\t{i + 1} [label="{normalized_name}"];\n')
 	
@@ -102,7 +107,10 @@ def create_graph(folder, create_cluster, label_cluster, strict, gv, text, lines,
 			subgraph_nodes = []
 			for path in folder_to_files[folder]:
 				color = 'black'
-				label = normalize(path) + get_extension(path)
+				if show_path:
+					label = files[i]
+				else:
+					label = normalize(files[i]) + get_extension(files[i]) 
 
 				ext = get_extension(path)
 				if ext in valid_headers[0]:
@@ -159,8 +167,10 @@ if __name__ == '__main__':
 	parser.add_argument('--text', action='store_true', help='Create graph.txt with filenames and edges', default=False)
 	parser.add_argument('--lines', action='store_true', help='Add to graph.txt number of lines in files', default=False)
 	parser.add_argument('--ignore-tests', action='store_true', help='Files with names that includes "test" will be ignored in graph', default=False)
+	parser.add_argument('--show-path', action='store_true', help='Files will be labeled with path', default=False)
+
   
 	args = parser.parse_args()
-	graph = create_graph(args.folder, args.cluster, args.cluster_labels, args.strict, args.gv, args.text, args.lines, args.ignore_tests)
+	graph = create_graph(args.folder, args.cluster, args.cluster_labels, args.strict, args.gv, args.text, args.lines, args.ignore_tests, args.show_path)
 	graph.format = args.format
 	graph.render(args.output, cleanup=True, view=args.view)

@@ -16,6 +16,8 @@ The original version does not work properly when files from different directorie
 
 --ignore-tests argument adds ignoring to files with names that includes "test".
 
+--show-path argument adds path in nodes labels.
+
 ## Installation
 
 The script depends on [Graphviz](https://www.graphviz.org/) to draw the graph. 
@@ -48,6 +50,7 @@ options:
   --text                Create graph.txt with filenames and edges
   --lines               Add to graph.txt number of lines in files
   --ignore-tests        Files with names that includes "test" will be ignored in graph
+  --show-path           Files will be labeled with path
 ```
 
 ## Examples
