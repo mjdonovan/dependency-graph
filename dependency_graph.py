@@ -116,9 +116,13 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
 
     find_neighbors("/ssd/dev/sgb/include/sgb/shuffle/shuffle.h")
 
+
+    common_prefix= os.path.commonprefix(list(folder_to_files))
+    print(common_prefix)
     subgraph_counter = 0
     for folder1 in folder_to_files:
-        with graph.subgraph(name='cluster_{}'.format(folder1)) as cluster:
+        folder1_name = folder1 if not (common_prefix and folder1.startswith(common_prefix)) else (folder1[len(common_prefix):])
+        with graph.subgraph(name='cluster_{}'.format(folder1_name)) as cluster:
             subgraph_nodes = []
             for path in folder_to_files[folder1]:
                 color = 'black'
@@ -153,9 +157,9 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
                     gv_lines.append(f'\tsubgraph cluster_{subgraph_counter} ' + '{\n')
                     subgraph_counter += 1
                 if label_cluster:
-                    cluster.attr(label=folder1)
+                    cluster.attr(label=folder1_name)
                     if gv:
-                        gv_lines.append(f'\t\tlabel = "{folder1}";\n')
+                        gv_lines.append(f'\t\tlabel = "{folder1_name}";\n')
                 if gv:
                     for node in subgraph_nodes:
                         gv_lines.append(f'\t\t{node};\n')
