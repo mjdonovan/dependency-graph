@@ -69,7 +69,7 @@ def get_absolute_path(path, include, include_directories):
 
 
 def create_graph(folder, include_directories, create_cluster, label_cluster, strict, gv, text, lines, ignore_tests,
-                 show_path):
+                 show_path, flip):
     """ Create a graph from a folder. """
     # Find nodes and clusters
     if ',' in folder:
@@ -116,6 +116,7 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
 
     find_neighbors("/ssd/dev/sgb/include/sgb/shuffle/shuffle.h")
 
+    unresolved = defaultdict(set)
 
     common_prefix= os.path.commonprefix(list(folder_to_files))
     print(common_prefix)
@@ -141,12 +142,13 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
                     subgraph_nodes.append(files_to_numbers[path])
                 else:
                     graph.node(path, label)
-                print(f"created node {label} for {path}")
                 neighbors = find_neighbors(path)
                 for neighbor in neighbors:
                     abs_path = get_absolute_path(path, neighbor, include_directories)
+                    if abs_path is None:
+                        unresolved[os.path.dirname(path)].add(neighbor)
                     if abs_path != path and abs_path in nodes:
-                        graph.edge(path, abs_path, color=color)
+                        graph.edge(abs_path if flip else path, path if flip else abs_path, color=color)
                         if text:
                             str_lines.append(f'{files_to_numbers[path]} {files_to_numbers[abs_path]}\n')
                         if gv:
@@ -172,6 +174,9 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
         with open('graph.gv', mode='w') as file:
             gv_lines.append('}')
             file.writelines(gv_lines)
+    for k, v in unresolved.items():
+        print(f'cannot resolve within {k}: {','.join(v)}')
+
     return graph
 
 
@@ -185,6 +190,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--view', action='store_true', help='View the graph')
     parser.add_argument('-c', '--cluster', action='store_true', help='Create a cluster for each subfolder')
     parser.add_argument('--cluster-labels', dest='cluster_labels', action='store_true', help='Label subfolder clusters')
+    parser.add_argument('--flip_edges', dest='flip_edges', action='store_false', help='Label subfolder clusters')
     parser.add_argument('-s', '--strict', action='store_true', help='Rendering should merge multi-edges', default=False)
     parser.add_argument('--gv', action='store_true', help='Create graph.gv', default=False)
     parser.add_argument('--text', action='store_true', help='Create graph.txt with filenames and edges', default=False)
@@ -196,6 +202,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     graph = create_graph(args.folder, args.include_directories, args.cluster, args.cluster_labels, args.strict, args.gv,
                          args.text, args.lines,
-                         args.ignore_tests, args.show_path)
+                         args.ignore_tests, args.show_path, args.flip_edges)
     graph.format = args.format
     graph.render(args.output, cleanup=True, view=args.view)
