@@ -63,7 +63,7 @@ def get_absolute_path(path, include, include_directories):
     include_directories.append(os.path.dirname(path))
     for id in include_directories:
         maybe = os.path.join(id, include)
-        if os   .path.exists(maybe):
+        if os.path.exists(maybe):
             return os.path.normpath(maybe)
     return None
 
@@ -88,7 +88,7 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
 
     nodes = set(files)
     # Create graph
-    graph = Digraph(strict=strict)
+    g0 = Digraph(strict=strict)
     # Find edges and create clusters
 
     files_to_numbers = {f: i + 1 for i, f in enumerate(files)}
@@ -114,18 +114,17 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
                 normalized_name = normalize(files[i]) + get_extension(files[i])
             gv_lines.append(f'\t{i + 1} [label="{normalized_name}"];\n')
 
-    find_neighbors("/ssd/dev/sgb/include/sgb/shuffle/shuffle.h")
-
     unresolved = defaultdict(set)
 
-    common_prefix= os.path.commonprefix(list(folder_to_files))
+    common_prefix = os.path.commonprefix(list(folder_to_files))
     print(common_prefix)
     subgraph_counter = 0
-    for folder1 in folder_to_files:
+    for folder1, files_in_folder in folder_to_files.items():
         folder1_name = folder1 if not (common_prefix and folder1.startswith(common_prefix)) else (folder1[len(common_prefix):])
+        graph = g0
         with graph.subgraph(name='cluster_{}'.format(folder1_name)) as cluster:
             subgraph_nodes = []
-            for path in folder_to_files[folder1]:
+            for path in files_in_folder:
                 color = 'black'
                 if show_path:
                     label = path
@@ -148,7 +147,7 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
                     if abs_path is None:
                         unresolved[os.path.dirname(path)].add(neighbor)
                     if abs_path != path and abs_path in nodes:
-                        graph.edge(abs_path if flip else path, path if flip else abs_path, color=color)
+                        g0.edge(abs_path if flip else path, path if flip else abs_path, color=color)
                         if text:
                             str_lines.append(f'{files_to_numbers[path]} {files_to_numbers[abs_path]}\n')
                         if gv:
@@ -175,12 +174,11 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
             gv_lines.append('}')
             file.writelines(gv_lines)
     for k, v in unresolved.items():
-        print(f'cannot resolve within {k}: {','.join(v)}')
+        print(f'cannot resolve within {k}: {",".join(v)}')
 
-    return graph
+    return g0
 
-
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('folder', help='Path to the folder to scan')
     parser.add_argument('include_directories', help='include directories')
@@ -205,3 +203,5 @@ if __name__ == '__main__':
                          args.ignore_tests, args.show_path, args.flip_edges)
     graph.format = args.format
     graph.render(args.output, cleanup=True, view=args.view)
+if __name__ == '__main__':
+    main()
