@@ -68,6 +68,27 @@ def get_absolute_path(path, include, include_directories):
     return None
 
 
+def consume(magic, graph, label_cluster, stack, fire):
+    empty = tuple()
+    if empty in magic:
+        print(f"use {magic[empty]}")
+        fire(magic.pop(empty), '/'.join(stack), graph)
+    while magic:
+        # noinspection PyUnresolvedReferences
+        key = min(magic, key=len)[0]
+        stack.append(key)
+        cluster_name = '/'.join(stack)
+        print(f'==> {stack}')
+        with graph.subgraph(name=f"cluster_{cluster_name}") as cluster:
+            if label_cluster:
+                cluster.attr(label=cluster_name)
+
+            magic1 = {k[1:]: magic.pop(k) for k in [k for k in magic if k[0] == key]}
+            consume(magic1, cluster, label_cluster, stack, fire)
+        stack.pop()
+        print(f'<== {stack}')
+
+
 def create_graph(folder, include_directories, create_cluster, label_cluster, strict, gv, text, lines, ignore_tests,
                  show_path, flip):
     """ Create a graph from a folder. """
@@ -81,19 +102,16 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
         files = find_all_files(folder, ignore_tests)
         n_folder = normalize(folder)
 
-    folder_to_files = defaultdict(list)
-    for path in files:
-        folder_to_files[os.path.dirname(path)].append(path)
-    folder_to_files = dict(**folder_to_files)
-
     nodes = set(files)
     # Create graph
     g0 = Digraph(strict=strict)
     # Find edges and create clusters
 
     files_to_numbers = {f: i + 1 for i, f in enumerate(files)}
+    str_lines = []
+    gv_lines = []
     if text:
-        str_lines = ['', 'Nodes:\n']
+        str_lines.extend(['', 'Nodes:\n'])
         for i in range(len(files)):
             if show_path:
                 normalized_name = files[i]
@@ -105,7 +123,6 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
                 str_lines.append(f'{i + 1} {normalized_name}\n')
         str_lines.append('Edges:\n')
     if gv:
-        gv_lines = []
         gv_lines.append('digraph ' + str(n_folder) + ' {\n')
         for i in range(len(files)):
             if show_path:
@@ -116,67 +133,72 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
 
     unresolved = defaultdict(set)
 
-    common_prefix = os.path.commonprefix(list(folder_to_files))
-    print(common_prefix)
-    subgraph_counter = 0
-    for folder1, files_in_folder in folder_to_files.items():
-        folder1_name = folder1 if not (common_prefix and folder1.startswith(common_prefix)) else (folder1[len(common_prefix):])
-        graph = g0
-        with graph.subgraph(name='cluster_{}'.format(folder1_name)) as cluster:
-            subgraph_nodes = []
-            for path in files_in_folder:
-                color = 'black'
-                if show_path:
-                    label = path
-                else:
-                    label = normalize(path) + get_extension(path)
+    common_prefix = os.path.commonprefix(files)
+    magic = {}
+    for path in files:
+        folder1 = os.path.dirname(path)
+        folder2 = tuple(os.path.normpath(folder1 if not (common_prefix and folder1.startswith(common_prefix)) else (folder1[len(common_prefix):])).split(os.path.sep))
+        if folder2 not in magic:
+            magic[folder2] = []
+        magic[folder2].append(path)
 
-                ext = get_extension(path)
-                if ext in valid_headers[0]:
-                    color = valid_headers[1]
-                if ext in valid_sources[0]:
-                    color = valid_sources[1]
-                if create_cluster:
-                    cluster.node(path, label)
-                    subgraph_nodes.append(files_to_numbers[path])
-                else:
-                    graph.node(path, label)
-                neighbors = find_neighbors(path)
-                for neighbor in neighbors:
-                    abs_path = get_absolute_path(path, neighbor, include_directories)
-                    if abs_path is None:
-                        unresolved[os.path.dirname(path)].add(neighbor)
-                    if abs_path != path and abs_path in nodes:
-                        g0.edge(abs_path if flip else path, path if flip else abs_path, color=color)
-                        if text:
-                            str_lines.append(f'{files_to_numbers[path]} {files_to_numbers[abs_path]}\n')
-                        if gv:
-                            gv_lines.append(
-                                f'\t{files_to_numbers[path]} -> {files_to_numbers[abs_path]} [color = {color}];\n')
-            if create_cluster:
-                if gv:
-                    gv_lines.append(f'\tsubgraph cluster_{subgraph_counter} ' + '{\n')
-                    subgraph_counter += 1
-                if label_cluster:
-                    cluster.attr(label=folder1_name)
-                    if gv:
-                        gv_lines.append(f'\t\tlabel = "{folder1_name}";\n')
-                if gv:
-                    for node in subgraph_nodes:
-                        gv_lines.append(f'\t\t{node};\n')
-                    gv_lines.append('\t}\n')
-    if text:
-        with open('graph.txt', mode='w') as file:
-            str_lines[0] = f'Nodes count: {len(files)} Edges count: {len(str_lines) - len(files) - 3}\n'
-            file.writelines(str_lines)
-    if gv:
-        with open('graph.gv', mode='w') as file:
-            gv_lines.append('}')
-            file.writelines(gv_lines)
+    def fire(files_in_folder, folder1_name, graph):
+        add_stuff(create_cluster, files_in_folder, files_to_numbers, flip, folder1_name, g0, graph, gv, gv_lines,
+                  include_directories, label_cluster, nodes, show_path, str_lines, 0, text, unresolved)
+
+    consume(magic, g0, label_cluster, [], fire)
+
     for k, v in unresolved.items():
         print(f'cannot resolve within {k}: {",".join(v)}')
 
     return g0
+
+
+def add_stuff(create_cluster, files_in_folder, files_to_numbers, flip, folder1_name, g0, cluster, gv, gv_lines,
+              include_directories, label_cluster, nodes, show_path, str_lines, subgraph_counter, text, unresolved):
+    subgraph_nodes = []
+    for path in files_in_folder:
+        color = 'black'
+        if show_path:
+            label = path
+        else:
+            label = normalize(path) + get_extension(path)
+
+        ext = get_extension(path)
+        if ext in valid_headers[0]:
+            color = valid_headers[1]
+        if ext in valid_sources[0]:
+            color = valid_sources[1]
+        if create_cluster:
+            cluster.node(path, label)
+            subgraph_nodes.append(files_to_numbers[path])
+        else:
+            g0.node(path, label)
+        neighbors = find_neighbors(path)
+        for neighbor in neighbors:
+            abs_path = get_absolute_path(path, neighbor, include_directories)
+            if abs_path is None:
+                unresolved[os.path.dirname(path)].add(neighbor)
+            if abs_path != path and abs_path in nodes:
+                g0.edge(abs_path if flip else path, path if flip else abs_path, color=color)
+                if text:
+                    str_lines.append(f'{files_to_numbers[path]} {files_to_numbers[abs_path]}\n')
+                if gv:
+                    gv_lines.append(
+                        f'\t{files_to_numbers[path]} -> {files_to_numbers[abs_path]} [color = {color}];\n')
+    if create_cluster:
+        if gv:
+            gv_lines.append(f'\tsubgraph cluster_{subgraph_counter} ' + '{\n')
+            subgraph_counter += 1
+        if label_cluster:
+            # cluster.attr(label=folder1_name)
+            if gv:
+                gv_lines.append(f'\t\tlabel = "{folder1_name}";\n')
+        if gv:
+            for node in subgraph_nodes:
+                gv_lines.append(f'\t\t{node};\n')
+            gv_lines.append('\t}\n')
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -203,5 +225,7 @@ def main():
                          args.ignore_tests, args.show_path, args.flip_edges)
     graph.format = args.format
     graph.render(args.output, cleanup=True, view=args.view)
+
+
 if __name__ == '__main__':
     main()
