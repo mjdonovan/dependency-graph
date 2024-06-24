@@ -79,7 +79,7 @@ def consume(magic, graph, label_cluster, stack, fire):
         stack.append(key)
         cluster_name = '/'.join(stack)
         print(f'==> {stack}')
-        with graph.subgraph(name=f"cluster_{cluster_name}") as cluster:
+        with graph.subgraph(name=f"cluster_{cluster_name}", graph_attr=dict(penwidth='0.05', color='gray')) as cluster:
             if label_cluster:
                 cluster.attr(label=cluster_name)
 
@@ -104,7 +104,12 @@ def create_graph(folder, include_directories, create_cluster, label_cluster, str
 
     nodes = set(files)
     # Create graph
-    g0 = Digraph(strict=strict)
+    splines = 'polyline'
+    splines = 'ortho'
+    splines = 'true'
+    ga = dict(splines=splines, ranksep='1.0', newrank='true', concentrate='true')
+    # ga = {'concentrate': 'true', 'penwidth': '.31'}
+    g0 = Digraph(strict=strict, graph_attr=ga, node_attr=dict(shape='rectangle', penwidth='.3'), edge_attr=dict(penwidth='.3'))
     # Find edges and create clusters
 
     files_to_numbers = {f: i + 1 for i, f in enumerate(files)}
@@ -205,8 +210,7 @@ def main():
     parser.add_argument('folder', help='Path to the folder to scan')
     parser.add_argument('include_directories', help='include directories')
     parser.add_argument('output', help='Path of the output file without the extension')
-    parser.add_argument('-f', '--format', help='Format of the output', default='pdf', \
-                        choices=['bmp', 'gif', 'jpg', 'png', 'pdf', 'svg'])
+    parser.add_argument('-f', '--format', help='Format of the output', default='pdf', choices=['bmp', 'gif', 'jpg', 'png', 'pdf', 'svg'])
     parser.add_argument('-v', '--view', action='store_true', help='View the graph')
     parser.add_argument('-c', '--cluster', action='store_true', help='Create a cluster for each subfolder')
     parser.add_argument('--cluster-labels', dest='cluster_labels', action='store_true', help='Label subfolder clusters')
